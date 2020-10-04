@@ -10,8 +10,8 @@ This is a project covering the hardware and software needed to have a color disp
 * USB C cable
 * 3D Printed Case for the TTGO TDisplay
   * I modified [this model](https://www.thingiverse.com/thing:4501444) and filled in the face buttons
-* Optional Materials for a cleaner hardwired look
-  * USB Cable
+* Optional Materials for a cleaner, hardwired look
+  * Sacrificial USB Cable
   * Wire Strippers
   * Soldering Iron and Solder
   * Side Snips
