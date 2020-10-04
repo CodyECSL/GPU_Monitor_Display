@@ -24,6 +24,10 @@ This is a project covering the hardware and software needed to have a color disp
 * Download Library "TFT_eSPI"
 * Navigate to the TFT_eSPI Library folder in your users directory
   * In Windows, this would be C:\Users\YOUR_USERNAME\\.platformio\lib\TFT_eSPI_restOfFolderName
+* Make the following changes to the User_Setup_Select.h file in the TFT_eSPI_restOfFolderName folder:
+  * Comment out "#include <User_Setup.h>"
+  * Uncomment "#include <User_Setups/Setup25_TTGO_T_Display.h>"
+  * Save Settings
 
 ## Getting the customized URL from RemoteHWInfo
 * Get the IP of your Desktop
