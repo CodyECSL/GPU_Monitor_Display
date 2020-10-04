@@ -1,5 +1,9 @@
 # GPU_Monitor_Display
 
+This is a project covering the hardware and software needed to have a color display in your desktop that provides GPU Stats like Temperature, Clock Speed, Load, etc.
+
+[![Video](https://img.youtube.com/vi/MVAwSv7tcVc/0.jpg)](https://www.youtube.com/watch?v=MVAwSv7tcVc)
+
 ## Hardware:
 * TTGO TDisplay (Arduino-based Microcontroller)
   * [Example Link](https://www.aliexpress.com/item/4000059428373.html?spm=a2g0s.9042311.0.0.493c4c4dIXBpsw)
