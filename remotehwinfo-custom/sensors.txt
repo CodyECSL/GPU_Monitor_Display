@@ -1,0 +1,4 @@
+GPU Temperature=0
+GPU Clock=1
+GPU Core Load=2
+GPU Power=3
