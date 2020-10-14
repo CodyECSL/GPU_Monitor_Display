@@ -11,26 +11,8 @@
 #include <esp_wifi.h>
 #include <map>
 #include <vector>
-// #include <Fonts/GothamBook_12.h>
-// #include <Fonts/GothamBook_5.h>
-// #include <Fonts/GothamBook_7.h>
 #include <Fonts/GothamBook_9.h>
-// #include <Knackles/knackles001.h>
-// #include <Knackles/knackles002.h>
-// #include <Knackles/knackles003.h>
-// #include <Knackles/knackles004.h>
-// #include <Knackles/knackles005.h>
-// #include <Knackles/knackles006.h>
-// #include <Knackles/knackles007.h>
-// #include <Knackles/knackles008.h>
-#include <EVGA_GIF/EVGA_0.h>
-#include <EVGA_GIF/EVGA_1.h>
-#include <EVGA_GIF/EVGA_2.h>
-#include <EVGA_GIF/EVGA_3.h>
-#include <EVGA_GIF/EVGA_4.h>
-#include <EVGA_GIF/EVGA_5.h>
-#include <EVGA_GIF/EVGA_6.h>
-#include <EVGA_GIF/EVGA_7.h>
+#include <EVGA_GIF/EVGA_GIF.h>
 
 #define LED_ON HIGH
 #define LED_OFF LOW
@@ -64,24 +46,14 @@ struct SENSOR_DATA {
     String value;
     String unit;
 };
-
-std::vector<SENSOR_DATA> sensorsVector;
-const char *GpuTemperatureString = "GPU Temperature";
-const char *GpuClockString = "GPU Clock";
-const char *GpuUsageString = "GPU Core Load";
-int GpuTemperatureIteratorValue, GpuClockIteratorValue, GpuUsageIteratorValue = -1;
-
+SENSOR_DATA sensorDataDummyStruct = {};
 
 auto evgaGif = { EVGA_0, EVGA_1, EVGA_2, EVGA_3, EVGA_4, EVGA_5, EVGA_6, EVGA_7 };
-// auto knacklesGif = {knackles001, knackles002, knackles003, knackles004, knackles005, knackles006, knackles007, knackles008};
 
 // Update Status every 1.5 seconds
 MillisTimer statusTimer = MillisTimer(1500);
 // Update Status every 3 seconds
 MillisTimer gifTimer = MillisTimer(3000);
-
-bool foundSensorData = false;
-int sensorValueArray[2];
 
 TFT_eSPI tft = TFT_eSPI(SCREEN_HEIGHT, SCREEN_WIDTH);
 HTTPClient http;
@@ -91,13 +63,14 @@ DynamicJsonDocument doc(capacity);
 
 ////////////////////////////////////////////////////////  Function Declerations  //////////////////////////////////////////////////////// 
 
+void SetTextDisplayDefaults();
 void ConnectToWifi();
+void CheckWifiStatus();
 void DrawEVGA();
-void DrawKnuckles();
 void UpdateStatusEvent(MillisTimer &mt);
 void AnimateGifEvent(MillisTimer &mt);
 void GetJsonData();
-void SetSensorValueArray(DynamicJsonDocument dynamicJsonDocument);
+void DrawJsonDataToDisplay();
 
 ////////////////////////////////////////////////////////  Setup & Loop  //////////////////////////////////////////////////////// 
 
@@ -106,39 +79,39 @@ void setup()
 
     Serial.begin(115200);
 
-    tft.init();
-    tft.setRotation(1);
-    tft.setSwapBytes(true);
-    tft.fillScreen(TFT_BLACK);
-
+    SetTextDisplayDefaults();
     ConnectToWifi();
 
     statusTimer.expiredHandler(UpdateStatusEvent);
     statusTimer.start();
     gifTimer.expiredHandler(AnimateGifEvent);
     gifTimer.start();
-    Serial.println("Started Handler");
 }
 
 void loop()
 {
     statusTimer.run();
     gifTimer.run();
-    // if (WiFi.status() != WL_CONNECTED)
-    // {
-    //     ConnectToWifi();
-    // }
-    // DrawKnuckles();
-    // delay(20);
-    // DrawKnuckles();
-    // DrawEVGA();
-    // GetJsonData();
 }
 
 ////////////////////////////////////////////////////////  Functions Implementations //////////////////////////////////////////////////////// 
 
+void SetTextDisplayDefaults() 
+{
+    tft.init();
+    tft.setRotation(1);
+    tft.setSwapBytes(true);
+    tft.fillScreen(TFT_BLACK);
+    tft.setFreeFont(&GothamBook9pt7b);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    int padding = tft.textWidth(String("GPU Temperature"), GFXFF); // get the width of the text in pixels
+    tft.setTextPadding(padding);
+}
+
 void ConnectToWifi()
 {
+    int counter = 0;
+    tft.fillScreen(TFT_BLACK);
     String connecting = "Connecting to Wifi";
     if ((WiFi.status() != WL_CONNECTED))
     {
@@ -146,12 +119,23 @@ void ConnectToWifi()
         while (WiFi.status() != WL_CONNECTED)
         {
             DrawEVGA();
-            // Serial.print('.');
             Serial.println(WiFi.status());
             delay(500);
-            tft.setTextColor(TFT_WHITE, TFT_BLACK);
             tft.drawString(connecting, 10, 0);
             connecting += ".";
+            counter++;
+
+            // BUG: Adding in the below software restart as there are instances where
+            //      WiFi fails to load due to some kind of race condition.
+            // Software Restart the device after 20 attempts
+            if (counter > 20) 
+            {
+                tft.fillScreen(TFT_BLACK);
+                tft.drawString("Restarting device in 5 seconds...", 0, 60);
+                delay(5000);
+                ESP.deepSleep(1);
+                ESP.restart();
+            }
         }
     }
 
@@ -160,26 +144,14 @@ void ConnectToWifi()
     tft.fillScreen(TFT_BLACK);
 }
 
-void SetSensorValueArray(DynamicJsonDocument dynamicJsonDocument)
+void CheckWifiStatus()
 {
-    auto NumberOfEntries = dynamicJsonDocument["hwinfo"]["readings"].size();
-
-    for (int i = 0; i < NumberOfEntries; i++)
+    Serial.println(WiFi.status());
+    if (WiFi.status() != WL_CONNECTED)
     {
-        SENSOR_DATA sd = {
-            dynamicJsonDocument["hwinfo"]["readings"][i]["labelUser"],
-            dynamicJsonDocument["hwinfo"]["readings"][i]["value"],
-            dynamicJsonDocument["hwinfo"]["readings"][i]["unit"],
-        };
-        sensorsVector.push_back(sd);
-        Serial.println(sd.label);
-    }
-
-    // If all values have been set
-    if (sensorsVector.size() == NumberOfEntries)
-    {
-        foundSensorData = true;
-        Serial.println("FOUND ALL SENSOR DATA FOUND");
+        statusTimer.stop();
+        gifTimer.stop();
+        ConnectToWifi();
     }
 }
 
@@ -210,54 +182,47 @@ void GetJsonData()
             return;
         }
 
-        if (!foundSensorData)
-        {
-            Serial.println("Getting Sensor Data Iterators");
-            SetSensorValueArray(doc);
-        }
-
-        tft.setFreeFont(&GothamBook9pt7b);
-        tft.setTextColor(TFT_WHITE, TFT_BLACK);
-        int padding = tft.textWidth(String("GPU Temp"), GFXFF); // get the width of the text in pixels
-        tft.setTextPadding(padding);
-
-        size_t sizeOfJsonDoc = doc["hwinfo"]["readings"].size();
-
-        for (int i = 0 ; i < sizeOfJsonDoc ; i++ ) {
-
-            SENSOR_DATA sd = {
-                doc["hwinfo"]["readings"][i]["labelUser"],
-                doc["hwinfo"]["readings"][i]["value"],
-                doc["hwinfo"]["readings"][i]["unit"],
-            };
-            
-            String label = sd.label;
-            String valueWithUnit = sd.value + " " + sd.unit;
-
-            switch(i) {
-                case 0:
-                    tft.drawString(label, 0, 5);
-                    tft.drawString(valueWithUnit, 0, 25);
-                    break;
-                case 1:
-                    tft.drawString(label, 140, 5);
-                    tft.drawString(valueWithUnit, 140, 25);
-                    break;
-                case 2:
-                    tft.drawString(label, 0, 45);
-                    tft.drawString(valueWithUnit, 0, 65);
-                    break;
-                case 3:
-                    tft.drawString(label, 140, 45);
-                    tft.drawString(valueWithUnit, 140, 65);
-                    break;
-            }
-
-        }
+        DrawJsonDataToDisplay();
     }
     else
     {
         Serial.println("Bad Error Code: " + String(httpCode));
+    }
+}
+
+void DrawJsonDataToDisplay () 
+{
+    size_t sizeOfJsonDoc = doc["hwinfo"]["readings"].size();
+
+    for (int i = 0 ; i < sizeOfJsonDoc ; i++ ) {
+        
+        sensorDataDummyStruct = {
+            doc["hwinfo"]["readings"][i]["labelUser"],
+            doc["hwinfo"]["readings"][i]["value"],
+            doc["hwinfo"]["readings"][i]["unit"],
+        };
+        
+        String label = sensorDataDummyStruct.label;
+        String valueWithUnit =  String(sensorDataDummyStruct.value.toInt()) + " " + sensorDataDummyStruct.unit;
+
+        switch(i) {
+            case 0:
+                tft.drawString(label, 0, 5);
+                tft.drawString(valueWithUnit, 0, 25);
+                break;
+            case 1:
+                tft.drawString(label, 140, 5);
+                tft.drawString(valueWithUnit, 140, 25);
+                break;
+            case 2:
+                tft.drawString(label, 0, 45);
+                tft.drawString(valueWithUnit, 0, 65);
+                break;
+            case 3:
+                tft.drawString(label, 140, 45);
+                tft.drawString(valueWithUnit, 140, 65);
+                break;
+        }
     }
 }
 
@@ -269,12 +234,3 @@ void DrawEVGA()
         delay(50);
     }
 }
-
-// void DrawKnuckles()
-// {
-//     for (auto it = begin(knacklesGif); it != end(knacklesGif); ++it)
-//     {
-//         tft.pushImage(0, 0, 135, 135, *it);
-//         delay(20);
-//     }
-// }
