@@ -50,16 +50,19 @@ SENSOR_DATA sensorDataDummyStruct = {};
 
 auto evgaGif = { EVGA_0, EVGA_1, EVGA_2, EVGA_3, EVGA_4, EVGA_5, EVGA_6, EVGA_7 };
 
-// Update Status every 1.5 seconds
-MillisTimer statusTimer = MillisTimer(1500);
-// Update Status every 3 seconds
-MillisTimer gifTimer = MillisTimer(3000);
+// Update Status every 1 second
+MillisTimer statusTimer = MillisTimer(1000);
+// Update Status every 2.5 seconds
+MillisTimer gifTimer = MillisTimer(2500);
+
+TaskHandle_t GetJsonDataTask;
 
 TFT_eSPI tft = TFT_eSPI(SCREEN_HEIGHT, SCREEN_WIDTH);
 HTTPClient http;
 
 const size_t capacity = JSON_ARRAY_SIZE(221) + 221 * JSON_OBJECT_SIZE(6) + 18290;
 DynamicJsonDocument doc(capacity);
+DynamicJsonDocument docCopy(capacity);
 
 ////////////////////////////////////////////////////////  Function Declerations  //////////////////////////////////////////////////////// 
 
@@ -67,9 +70,9 @@ void SetTextDisplayDefaults();
 void ConnectToWifi();
 void CheckWifiStatus();
 void DrawEVGA();
-void UpdateStatusEvent(MillisTimer &mt);
+void DrawDisplayEvent(MillisTimer &mt);
 void AnimateGifEvent(MillisTimer &mt);
-void GetJsonData();
+void GetJsonData(void * parameter);
 void DrawJsonDataToDisplay();
 
 ////////////////////////////////////////////////////////  Setup & Loop  //////////////////////////////////////////////////////// 
@@ -82,7 +85,17 @@ void setup()
     SetTextDisplayDefaults();
     ConnectToWifi();
 
-    statusTimer.expiredHandler(UpdateStatusEvent);
+    // Set JSON fetching on Core 0 which leaves UI updates on Core 1
+    xTaskCreatePinnedToCore(
+      GetJsonData, /* Function to implement the task */
+      "GetJsonDataOnCore0", /* Name of the task */
+      10000,  /* Stack size in words */
+      NULL,  /* Task input parameter */
+      0,  /* Priority of the task */
+      &GetJsonDataTask,  /* Task handle. */
+      0); /* Core where the task should run */
+
+    statusTimer.expiredHandler(DrawDisplayEvent);
     statusTimer.start();
     gifTimer.expiredHandler(AnimateGifEvent);
     gifTimer.start();
@@ -90,6 +103,7 @@ void setup()
 
 void loop()
 {
+    CheckWifiStatus();
     statusTimer.run();
     gifTimer.run();
 }
@@ -146,7 +160,6 @@ void ConnectToWifi()
 
 void CheckWifiStatus()
 {
-    Serial.println(WiFi.status());
     if (WiFi.status() != WL_CONNECTED)
     {
         statusTimer.stop();
@@ -155,43 +168,53 @@ void CheckWifiStatus()
     }
 }
 
-void UpdateStatusEvent(MillisTimer &mt) {
-    GetJsonData();
+void DrawDisplayEvent(MillisTimer &mt) {
+    DrawJsonDataToDisplay();
 }
 
 void AnimateGifEvent(MillisTimer &mt) {
     DrawEVGA();
 }
 
-void GetJsonData()
+void GetJsonData(void * parameter)
 {
-    http.begin(ENDPOINT_URL);
-    int httpCode = http.GET();
-
-    if (httpCode > 0)
+    while (true)
     {
-        // Refactor the code in this conditional into a String parseJson (String
-        // jsonVal) { xxx }
-        String payload = http.getString();
-       
-        DeserializationError deserializationError = deserializeJson(doc, payload);
-        if (deserializationError)
+        Serial.println("GetJsonData");
+        Serial.println(xPortGetCoreID());
+        http.begin(ENDPOINT_URL);
+        int httpCode = http.GET();
+
+        if (httpCode > 0)
         {
-            Serial.println("deserialization failed");
-            Serial.println("HTTP Code: " + String(httpCode));
-            return;
+            String payload = http.getString();
+        
+            DeserializationError deserializationError = deserializeJson(doc, payload);
+            if (deserializationError)
+            {
+                Serial.println("deserialization failed");
+                Serial.println("HTTP Code: " + String(httpCode));
+                return;
+            }
+
+            // Create a copy of the doc object so there is no contention of the same
+            // object between cores
+            docCopy = doc;
+        }
+        else
+        {
+            Serial.println("Bad Error Code: " + String(httpCode));
         }
 
-        DrawJsonDataToDisplay();
+        vTaskDelay(500);
     }
-    else
-    {
-        Serial.println("Bad Error Code: " + String(httpCode));
-    }
+    
 }
 
 void DrawJsonDataToDisplay () 
 {
+    Serial.println("DrawJsonDataToDisplay");
+    Serial.println(xPortGetCoreID());
     size_t sizeOfJsonDoc = doc["hwinfo"]["readings"].size();
 
     for (int i = 0 ; i < sizeOfJsonDoc ; i++ ) {
@@ -228,6 +251,8 @@ void DrawJsonDataToDisplay ()
 
 void DrawEVGA()
 {
+    Serial.println("DrawEVGA");
+    Serial.println(xPortGetCoreID());
     for (auto it = begin(evgaGif); it != end(evgaGif); ++it)
     {
         tft.pushImage(0, SCREEN_HEIGHT - 52, 229, 52, *it);
