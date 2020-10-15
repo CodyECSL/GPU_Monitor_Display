@@ -162,7 +162,7 @@ bool EntryEnabled[EntryTotalCount] = {0};
 unsigned int Port = 60000;
 
 bool Hwinfo = true, Gpuz = false, Afterburner = false;
-bool LogFileEnable = true;
+bool LogFileEnable = false;
 
 // Sensor Entries Map that's filled by reading the config file
 map<string, int> sensorEntries;
