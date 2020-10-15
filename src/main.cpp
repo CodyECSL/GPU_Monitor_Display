@@ -63,6 +63,7 @@ HTTPClient http;
 const size_t capacity = JSON_ARRAY_SIZE(221) + 221 * JSON_OBJECT_SIZE(6) + 18290;
 DynamicJsonDocument doc(capacity);
 DynamicJsonDocument docCopy(capacity);
+bool firstIteration = true;
 
 ////////////////////////////////////////////////////////  Function Declerations  //////////////////////////////////////////////////////// 
 
@@ -118,8 +119,7 @@ void SetTextDisplayDefaults()
     tft.fillScreen(TFT_BLACK);
     tft.setFreeFont(&GothamBook9pt7b);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    int padding = tft.textWidth(String("GPU Temperature"), GFXFF); // get the width of the text in pixels
-    tft.setTextPadding(padding);
+    tft.setTextDatum(TL_DATUM);
 }
 
 void ConnectToWifi()
@@ -145,7 +145,7 @@ void ConnectToWifi()
             if (counter > 20) 
             {
                 tft.fillScreen(TFT_BLACK);
-                tft.drawString("Restarting device in 5 seconds...", 0, 60);
+                tft.drawString("Restarting device in 5 seconds...", 1, 60);
                 delay(5000);
                 ESP.deepSleep(1);
                 ESP.restart();
@@ -227,25 +227,54 @@ void DrawJsonDataToDisplay ()
         
         String label = sensorDataDummyStruct.label;
         String valueWithUnit =  String(sensorDataDummyStruct.value.toInt()) + " " + sensorDataDummyStruct.unit;
+        tft.setTextPadding(tft.textWidth(valueWithUnit) + 30);
 
         switch(i) {
             case 0:
-                tft.drawString(label, 0, 5);
-                tft.drawString(valueWithUnit, 0, 25);
+                if (firstIteration)
+                {
+                    tft.drawString(label, 1, 5);
+                }
+                tft.drawString(valueWithUnit, 1, 25);
                 break;
             case 1:
-                tft.drawString(label, 140, 5);
+                if (firstIteration)
+                {
+                    tft.drawString(label, 140, 5);                    
+                }
                 tft.drawString(valueWithUnit, 140, 25);
                 break;
             case 2:
-                tft.drawString(label, 0, 45);
-                tft.drawString(valueWithUnit, 0, 65);
+                if (firstIteration)
+                {
+                    tft.drawString(label, 1, 45);    
+                }
+                tft.drawString(valueWithUnit, 1, 65);
                 break;
             case 3:
-                tft.drawString(label, 140, 45);
+                if (firstIteration)
+                {
+                    tft.drawString(label, 140, 45);
+                }
                 tft.drawString(valueWithUnit, 140, 65);
                 break;
         }
+
+        // This delay is here as you're fighting with the
+        // display's refresh rate and refershing text too
+        // quickly causes flickering on the screen. 
+        // Delay time was increased until a majority of 
+        // flickering was no longer observed.
+        if (!firstIteration)
+        {
+            delay(350);
+        }
+    }
+
+    if (firstIteration && sizeOfJsonDoc > 0)
+    {
+        Serial.println("Finished first iteration");
+        firstIteration = false;
     }
 }
 
