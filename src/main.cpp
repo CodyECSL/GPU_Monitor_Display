@@ -1,18 +1,18 @@
 #include <Arduino.h>
 #include <ArduinoJson.h> //https://arduinojson.org/v6/assistant/
 #include <Free_Fonts.h>
-#include <HTTPClient.h>
 #include <MillisTimer.h>
 #include <SPI.h>
 #include <TFT_eSPI.h>
-#include <WiFi.h>
 #include <Wire.h>
 #include <config.h>
-#include <esp_wifi.h>
 #include <map>
 #include <vector>
 #include <Fonts/GothamBook_9.h>
-#include <EVGA_GIF/EVGA_GIF.h>
+#include <Gifs/EvgaMainGif.h>
+#include <Gifs/EvgaIntro.h>
+#include <Gifs/NvidiaRtx.h>
+
 
 #define LED_ON HIGH
 #define LED_OFF LOW
@@ -48,54 +48,60 @@ struct SENSOR_DATA {
 };
 SENSOR_DATA sensorDataDummyStruct = {};
 
-auto evgaGif = { EVGA_0, EVGA_1, EVGA_2, EVGA_3, EVGA_4, EVGA_5, EVGA_6, EVGA_7 };
+auto evgaMainGif = { EvgaMainGif_0, EvgaMainGif_1, EvgaMainGif_2, EvgaMainGif_3, EvgaMainGif_4, EvgaMainGif_5, EvgaMainGif_6, EvgaMainGif_7, EvgaMainGif_8, EvgaMainGif_9, EvgaMainGif_10, EvgaMainGif_11, EvgaMainGif_12, EvgaMainGif_13, EvgaMainGif_14, EvgaMainGif_15 };
+auto evgaIntroGif = { EvgaIntro_0, EvgaIntro_1, EvgaIntro_2, EvgaIntro_3, EvgaIntro_4, EvgaIntro_5, EvgaIntro_6, EvgaIntro_7, EvgaIntro_8, EvgaIntro_9, EvgaIntro_10, EvgaIntro_11, EvgaIntro_12, EvgaIntro_13, EvgaIntro_14, EvgaIntro_15, EvgaIntro_16, EvgaIntro_17, EvgaIntro_18, EvgaIntro_19, EvgaIntro_20, EvgaIntro_21, EvgaIntro_22 };
+auto nvidiaGif = { NvidiaRtx_0, NvidiaRtx_1, NvidiaRtx_2, NvidiaRtx_3, NvidiaRtx_4, NvidiaRtx_5, NvidiaRtx_6, NvidiaRtx_7, NvidiaRtx_8, NvidiaRtx_9, NvidiaRtx_10, NvidiaRtx_11, NvidiaRtx_12, NvidiaRtx_13 };
 
 // Update Status every 1 second
 MillisTimer statusTimer = MillisTimer(1000);
 // Update Status every 2.5 seconds
 MillisTimer gifTimer = MillisTimer(2500);
 
-TaskHandle_t GetJsonDataTask;
+TaskHandle_t ReadSerialTask;
 
 TFT_eSPI tft = TFT_eSPI(SCREEN_HEIGHT, SCREEN_WIDTH);
-HTTPClient http;
 
 const size_t capacity = JSON_ARRAY_SIZE(221) + 221 * JSON_OBJECT_SIZE(6) + 18290;
 DynamicJsonDocument doc(capacity);
 DynamicJsonDocument docCopy(capacity);
 bool firstIteration = true;
+bool confirmedSerialConnection = false;
 
 ////////////////////////////////////////////////////////  Function Declerations  //////////////////////////////////////////////////////// 
 
 void SetTextDisplayDefaults();
-void ConnectToWifi();
-void CheckWifiStatus();
+void DrawIntroLoop();
 void DrawEVGA();
+void DrawEVGAIntro();
+void DrawNvidia();
 void DrawDisplayEvent(MillisTimer &mt);
 void AnimateGifEvent(MillisTimer &mt);
-void GetJsonData(void * parameter);
+void ReadSerial(void * parameter);
 void DrawJsonDataToDisplay();
+void CreateAsyncSerialTask();
 
 ////////////////////////////////////////////////////////  Setup & Loop  //////////////////////////////////////////////////////// 
 
 void setup()
 {
 
-    Serial.begin(115200);
+    Serial.end();
+    Serial.begin(256000);
 
     SetTextDisplayDefaults();
-    ConnectToWifi();
 
-    // Set JSON fetching on Core 0 which leaves UI updates on Core 1
-    xTaskCreatePinnedToCore(
-      GetJsonData, /* Function to implement the task */
-      "GetJsonDataOnCore0", /* Name of the task */
-      10000,  /* Stack size in words */
-      NULL,  /* Task input parameter */
-      0,  /* Priority of the task */
-      &GetJsonDataTask,  /* Task handle. */
-      0); /* Core where the task should run */
+    DrawIntroLoop();
 
+    CreateAsyncSerialTask();    
+
+    while (!confirmedSerialConnection)
+    {
+        // Chill out here until we have a verified Serial Connection with the app
+        DrawIntroLoop();
+    }
+    
+    tft.fillScreen(TFT_BLACK);
+    DrawEVGA();
     statusTimer.expiredHandler(DrawDisplayEvent);
     statusTimer.start();
     gifTimer.expiredHandler(AnimateGifEvent);
@@ -104,7 +110,6 @@ void setup()
 
 void loop()
 {
-    CheckWifiStatus();
     statusTimer.run();
     gifTimer.run();
 }
@@ -122,50 +127,17 @@ void SetTextDisplayDefaults()
     tft.setTextDatum(TL_DATUM);
 }
 
-void ConnectToWifi()
+void CreateAsyncSerialTask()
 {
-    int counter = 0;
-    tft.fillScreen(TFT_BLACK);
-    String connecting = "Connecting to Wifi";
-    if ((WiFi.status() != WL_CONNECTED))
-    {
-        WiFi.begin(WIFI_SSID, WIFI_PASSWD);
-        while (WiFi.status() != WL_CONNECTED)
-        {
-            DrawEVGA();
-            Serial.println(WiFi.status());
-            delay(500);
-            tft.drawString(connecting, 10, 0);
-            connecting += ".";
-            counter++;
-
-            // BUG: Adding in the below software restart as there are instances where
-            //      WiFi fails to load due to some kind of race condition.
-            // Software Restart the device after 20 attempts
-            if (counter > 20) 
-            {
-                tft.fillScreen(TFT_BLACK);
-                tft.drawString("Restarting device in 5 seconds...", 1, 60);
-                delay(5000);
-                ESP.deepSleep(1);
-                ESP.restart();
-            }
-        }
-    }
-
-    Serial.print(F("Connected. My IP address is: "));
-    Serial.println(WiFi.localIP());
-    tft.fillScreen(TFT_BLACK);
-}
-
-void CheckWifiStatus()
-{
-    if (WiFi.status() != WL_CONNECTED)
-    {
-        statusTimer.stop();
-        gifTimer.stop();
-        ConnectToWifi();
-    }
+    // Set data fetching on Core 0 which leaves UI updates on Core 1
+    xTaskCreatePinnedToCore(
+      ReadSerial, /* Function to implement the task */
+      "ReadSerialTaskOnCore0", /* Name of the task */
+      10000,  /* Stack size in words */
+      NULL,  /* Task input parameter */
+      0,  /* Priority of the task */
+      &ReadSerialTask,  /* Task handle. */
+      0); /* Core where the task should run */
 }
 
 void DrawDisplayEvent(MillisTimer &mt) {
@@ -176,53 +148,46 @@ void AnimateGifEvent(MillisTimer &mt) {
     DrawEVGA();
 }
 
-void GetJsonData(void * parameter)
+void ReadSerial(void * parameter)
 {
     while (true)
     {
-        Serial.println("GetJsonData");
-        Serial.println(xPortGetCoreID());
-        http.begin(ENDPOINT_URL);
-        int httpCode = http.GET();
-
-        if (httpCode > 0)
+        if (Serial.available() > 0)
         {
-            String payload = http.getString();
-        
-            DeserializationError deserializationError = deserializeJson(doc, payload);
+            String serialData = Serial.readStringUntil('\n');
+            DeserializationError deserializationError = deserializeJson(doc, serialData);
             if (deserializationError)
             {
-                Serial.println("deserialization failed");
-                Serial.println("HTTP Code: " + String(httpCode));
-                return;
+                // Serial.println("deserialization failed");
+                // Serial.println(serialData);
+                // return;
             }
-
-            // Create a copy of the doc object so there is no contention of the same
-            // object between cores
-            docCopy = doc;
+            else
+            {
+                // Create a copy of the doc object so there is no contention of the same
+                // object between cores
+                confirmedSerialConnection = true;
+                docCopy = doc;
+                Serial.println(serialData);
+            }
+                   
         }
-        else
-        {
-            Serial.println("Bad Error Code: " + String(httpCode));
-        }
-
-        vTaskDelay(500);
+        
+        // vTaskDelay(250);
     }
     
 }
 
 void DrawJsonDataToDisplay () 
 {
-    Serial.println("DrawJsonDataToDisplay");
-    Serial.println(xPortGetCoreID());
-    size_t sizeOfJsonDoc = doc["hwinfo"]["readings"].size();
+    size_t sizeOfJsonDoc = docCopy["r"].size();
 
     for (int i = 0 ; i < sizeOfJsonDoc ; i++ ) {
         
         sensorDataDummyStruct = {
-            doc["hwinfo"]["readings"][i]["labelUser"],
-            doc["hwinfo"]["readings"][i]["value"],
-            doc["hwinfo"]["readings"][i]["unit"],
+            docCopy["r"][i]["a"],
+            docCopy["r"][i]["c"],
+            docCopy["r"][i]["b"],
         };
         
         String label = sensorDataDummyStruct.label;
@@ -275,16 +240,62 @@ void DrawJsonDataToDisplay ()
     {
         Serial.println("Finished first iteration");
         firstIteration = false;
-    }
+    } 
+}
+
+void DrawIntroLoop()
+{
+    tft.fillScreen(TFT_BLACK);
+    DrawEVGAIntro();
+    tft.fillScreen(TFT_BLACK);
+    DrawNvidia();
 }
 
 void DrawEVGA()
 {
-    Serial.println("DrawEVGA");
-    Serial.println(xPortGetCoreID());
-    for (auto it = begin(evgaGif); it != end(evgaGif); ++it)
+    for (auto it = begin(evgaMainGif); it != end(evgaMainGif); ++it)
     {
-        tft.pushImage(0, SCREEN_HEIGHT - 52, 229, 52, *it);
+        tft.pushImage(0, SCREEN_HEIGHT - 53, 240, 53, *it);
         delay(50);
+    }
+}
+
+void DrawEVGAIntro()
+{
+    int gifHeight = 113;
+    int gifWidth = 200;
+    for (auto it = begin(evgaIntroGif); it != end(evgaIntroGif); ++it)
+    {
+        tft.pushImage( ((SCREEN_WIDTH - gifWidth) / 2), ((SCREEN_HEIGHT - gifHeight) / 2), gifWidth, gifHeight, *it);
+        delay(75);
+    }
+    delay(1000);
+}
+
+void DrawNvidia()
+{
+    int counter = 0;
+    int gifHeight = 63;
+    int gifWidth = 190;
+    for (auto it = begin(nvidiaGif); it != end(nvidiaGif); ++it)
+    {
+        tft.pushImage( ((SCREEN_WIDTH - gifWidth) / 2), ((SCREEN_HEIGHT - gifHeight) / 2), gifWidth, gifHeight, *it);
+        if (counter < 6)
+        {
+            delay(100);
+        }
+        else
+        {
+            delay(20);
+        }
+        if (counter == 6)
+        {
+            delay(1000);
+        }
+        if (counter == 13)
+        {
+            delay(2000);
+        }
+        counter++;
     }
 }
