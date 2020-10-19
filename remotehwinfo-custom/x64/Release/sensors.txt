@@ -1,5 +1,5 @@
+port=COM9
 GPU Temperature=0
 GPU Clock=1
 GPU Core Load=2
 GPU Power=3
-GPU Memory Usage=4
