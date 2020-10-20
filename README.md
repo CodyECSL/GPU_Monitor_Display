@@ -10,18 +10,13 @@ This is a project covering the hardware and software needed to have a color disp
 * USB C cable
 * 3D Printed Case for the TTGO TDisplay
   * I modified [this model](https://www.thingiverse.com/thing:4501444) and filled in the face buttons
-* Optional Materials for a cleaner, hardwired look
-  * Sacrificial USB Cable
-  * Wire Strippers
-  * Soldering Iron and Solder
-  * Side Snips
 
 ## Software:
 * Install VS Code
 * Install PlatformIO
 * Install [HWInfo](https://www.hwinfo.com/download/)
-* Download and Run [RemoteHWInfo](https://github.com/Demion/remotehwinfo) 
-* Download Library "TFT_eSPI"
+* Download an install the [CP210x USB to UART Driver](https://www.silabs.com/products/development-tools/software/usb-to-uart-bridge-vcp-drivers)
+* In VS Code > PlatformIO, Download Library "TFT_eSPI"
 * Navigate to the TFT_eSPI Library folder in your users directory
   * In Windows, this would be C:\Users\YOUR_USERNAME\\.platformio\lib\TFT_eSPI_restOfFolderName
 * Make the following changes to the User_Setup_Select.h file in the TFT_eSPI_restOfFolderName folder:
@@ -29,20 +24,3 @@ This is a project covering the hardware and software needed to have a color disp
   * Uncomment "#include <User_Setups/Setup25_TTGO_T_Display.h>"
   * Save Settings
 
-## Getting the customized URL from RemoteHWInfo
-* Get the IP of your Desktop
-* Run HWInfo
-* Run RemoteHWInfo
-* Open up http://YOUR_DESKTOP_IP:60000/json.json
-* For each of the following items, note the corresponding "entryIndex" values:
-  * GPU Temperature
-  * GPU Clock
-  * GPU Core Load
-* Add in the noted "entryIndex" values in a comma separated format in the below URL template:
-  * http://YOUR_DESKTOP_IP:60000/json.json?enable=value1,value2,value3
-    * Random Example: "http://10.10.183.64:60000/json.json?enable=176,180,183"
-* Navigate to your custom URL and verify that the only entries that appear are for the 3 items you provided.
-
-## Modify config.h
-* Replace the "WIFI_SSID_HERE" and "WIFI_PW_HERE" values with your connection info
-* Replace the "IP_PLUS_PORT_PLUS_IDS" value with your custom URL from the **Getting the customized URL from RemoteHWInfo** step
