@@ -26,3 +26,8 @@ This is a project covering the hardware and software needed to have a color disp
   * Uncomment "#include <User_Setups/Setup25_TTGO_T_Display.h>"
   * Save Settings
 
+## Setup:
+* Modify the Sensors.txt file located in GPU_Monitor_Display/remotehwinfo-custom/x64/Release/
+  * Modify the COM port to the value of your Arduino (default value is COM9 as that's what I had)
+* Run remotehwinfo.exe application located in GPU_Monitor_Display/remotehwinfo-custom/x64/Release/
+  * Sensors.txt needs to be in the same directory
