@@ -14,13 +14,13 @@ This is a project covering the hardware and software needed to have a color disp
   * I modified [this model](https://www.thingiverse.com/thing:4501444) and filled in the face buttons
 
 ## Software:
-* Install VS Code
-* Install PlatformIO
-* Install [HWInfo](https://www.hwinfo.com/download/)
-* Download an install the [CP210x USB to UART Driver](https://www.silabs.com/products/development-tools/software/usb-to-uart-bridge-vcp-drivers)
-* In VS Code > PlatformIO, Download Library "TFT_eSPI"
-* Navigate to the TFT_eSPI Library folder in your users directory
-  * In Windows, this would be C:\Users\YOUR_USERNAME\\.platformio\lib\TFT_eSPI_restOfFolderName
+* Install Visual Studio Code (VS Code)
+* Install the PlatformIO Extension in VS Code
+* Install [HWInfo v6.4.2](https://www.fosshub.com/HWiNFO-old.html?dwl=hwi_642.exe)
+* Download and install the [CP210x USB to UART Driver](https://www.silabs.com/products/development-tools/software/usb-to-uart-bridge-vcp-drivers)
+* Open the project in VS Code and Build the project.
+* Navigate to the TFT_eSPI Library folder in your Project directory
+  * Example: \GPU_Monitor_Display\.pio\libdeps\esp32dev\TFT_eSPI
 * Make the following changes to the User_Setup_Select.h file in the TFT_eSPI_restOfFolderName folder:
   * Comment out "#include <User_Setup.h>"
   * Uncomment "#include <User_Setups/Setup25_TTGO_T_Display.h>"
